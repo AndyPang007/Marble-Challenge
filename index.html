@@ -1,0 +1,686 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <meta name="theme-color" content="#101722" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Marble Mayhem 3D</title>
+  <style>
+    :root{
+      color-scheme:dark;
+      --bg:#0d121b;
+      --panel:#151d29;
+      --panel2:#1d2735;
+      --text:#f4f6f9;
+      --muted:#aeb8c7;
+      --line:#334156;
+      --accent:#f0c85a;
+      --danger:#e46767;
+      --good:#6ed8b2;
+    }
+    *{box-sizing:border-box}
+    html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;overscroll-behavior:none}
+    body{padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+    #app{width:100%;max-width:1200px;margin:0 auto;padding:10px}
+    .topbar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:8px}
+    .title{font-size:clamp(18px,3vw,28px);font-weight:800;letter-spacing:.02em}
+    .subtitle{font-size:13px;color:var(--muted)}
+    .hud{display:flex;gap:7px;flex-wrap:wrap}
+    .pill{background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:7px 10px;font-size:13px}
+    .pill b{color:#fff}
+    #gameWrap{
+      position:relative;width:100%;aspect-ratio:16/9;min-height:300px;max-height:76vh;
+      overflow:hidden;border:1px solid var(--line);border-radius:16px;background:#0c121b;
+      touch-action:none;
+    }
+    canvas{display:block;width:100%;height:100%}
+    .overlay{
+      position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:18px;
+      background:rgba(5,8,12,.66);backdrop-filter:blur(4px);z-index:20
+    }
+    .overlay.hidden{display:none}
+    .card{
+      width:min(520px,94%);background:rgba(20,28,39,.95);border:1px solid #435269;border-radius:18px;
+      padding:18px;text-align:center;box-shadow:0 20px 80px rgba(0,0,0,.35)
+    }
+    .card h1{margin:0 0 8px;font-size:24px}.card p{margin:6px 0 14px;color:var(--muted);line-height:1.45}
+    .actions{display:flex;gap:9px;flex-wrap:wrap;justify-content:center}
+    button,input{font:inherit}
+    button{
+      min-height:44px;border:1px solid var(--line);border-radius:12px;background:var(--panel2);color:var(--text);
+      padding:10px 14px;font-weight:700;cursor:pointer
+    }
+    button.primary{background:var(--accent);border-color:var(--accent);color:#161208}
+    button.good{border-color:#3c856c}
+    button:disabled{opacity:.45;cursor:not-allowed}
+    button:focus-visible,input:focus-visible{outline:3px solid rgba(240,200,90,.45);outline-offset:2px}
+    .bottom{
+      display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:start;margin-top:9px
+    }
+    .controlsPanel{
+      background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:10px;min-width:0
+    }
+    .row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+    .row + .row{margin-top:8px}
+    .status{font-size:13px;color:var(--muted);line-height:1.35;min-height:18px}
+    .status strong{color:var(--text)}
+    .sensor{font-size:12px;color:var(--muted)}
+    .sensor.ok{color:var(--good)} .sensor.bad{color:var(--danger)}
+    label{font-size:12px;color:var(--muted)}
+    input[type="range"]{width:150px;accent-color:var(--accent)}
+    .pad{display:grid;grid-template-columns:repeat(3,52px);grid-template-rows:repeat(2,52px);gap:5px;touch-action:none}
+    .pad button{width:52px;height:52px;padding:0;font-size:20px;user-select:none;-webkit-user-select:none}
+    .pad .blank{visibility:hidden}
+    .legend{font-size:12px;color:var(--muted);margin-top:6px}
+    #debug{font-variant-numeric:tabular-nums}
+    @media(max-width:720px){
+      #app{padding:6px}
+      .subtitle{display:none}
+      #gameWrap{aspect-ratio:4/3;min-height:320px;max-height:68vh}
+      .bottom{grid-template-columns:1fr}
+      .pad{justify-self:center}
+      .hud{gap:4px}.pill{padding:6px 8px;font-size:12px}
+    }
+    @media(orientation:landscape) and (max-height:520px){
+      #app{padding:4px}
+      .topbar{margin-bottom:4px}.title{font-size:18px}.subtitle{display:none}
+      #gameWrap{height:72vh;max-height:none;aspect-ratio:auto}
+      .bottom{position:absolute;left:8px;right:8px;bottom:8px;pointer-events:none;grid-template-columns:1fr auto}
+      .controlsPanel,.pad{pointer-events:auto}
+      .controlsPanel{background:rgba(16,23,34,.82)}
+      .pad button{background:rgba(28,39,53,.86)}
+    }
+  </style>
+</head>
+<body>
+<div id="app">
+  <div class="topbar">
+    <div>
+      <div class="title">Marble Mayhem 3D</div>
+      <div class="subtitle">Tilt your iPhone to steer. Real rigid-body ramps, slopes, walls and inertia.</div>
+    </div>
+    <div class="hud">
+      <div class="pill">Time <b id="time">120.0</b></div>
+      <div class="pill">Lives <b id="lives">5</b></div>
+      <div class="pill">Speed <b id="speed">0.0</b></div>
+      <div class="pill">CP <b id="cp">0</b>/3</div>
+    </div>
+  </div>
+
+  <div id="gameWrap" tabindex="0" aria-label="Marble game. Tilt phone or use arrow keys and WASD.">
+    <div id="loading" class="overlay">
+      <div class="card">
+        <h1>Loading game…</h1>
+        <p>Loading the 3D and physics engines.</p>
+      </div>
+    </div>
+
+    <div id="startOverlay" class="overlay hidden">
+      <div class="card">
+        <h1>Marble Mayhem 3D</h1>
+        <p>On iPhone, tap <b>Enable Tilt</b>, allow motion access, then hold the phone comfortably and tap <b>Calibrate</b>.</p>
+        <div class="actions">
+          <button id="enableTilt" class="primary" type="button">Enable Tilt</button>
+          <button id="startGame" type="button">Start with Touch / Keyboard</button>
+        </div>
+        <p class="legend">Netlify serves this over HTTPS, which is required for iPhone motion sensors.</p>
+      </div>
+    </div>
+
+    <div id="endOverlay" class="overlay hidden">
+      <div class="card">
+        <h1 id="endTitle">Course complete!</h1>
+        <p id="endText"></p>
+        <div class="actions"><button id="playAgain" class="primary" type="button">Play again</button></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bottom">
+    <div class="controlsPanel">
+      <div class="row">
+        <button id="tiltBtn" type="button">Enable Tilt</button>
+        <button id="calibrateBtn" type="button" disabled>Calibrate</button>
+        <button id="flipBtn" type="button" disabled>Flip Tilt</button>
+        <button id="resetBtn" type="button">Reset Marble</button>
+      </div>
+      <div class="row">
+        <label for="sensitivity">Tilt sensitivity</label>
+        <input id="sensitivity" type="range" min="0.4" max="2.4" value="1.15" step="0.05" />
+        <span id="sensVal" class="sensor">1.15×</span>
+      </div>
+      <div class="row">
+        <span id="sensorState" class="sensor">Tilt not enabled.</span>
+        <span id="debug" class="sensor"></span>
+      </div>
+      <div id="status" class="status">Use a connected ramp to change height. Cliff faces are solid.</div>
+      <div class="legend">Keyboard: WASD / arrows · Space = brake · R = reset · P = pause</div>
+    </div>
+
+    <div class="pad" aria-label="Touch controls">
+      <span class="blank"></span><button data-key="up" type="button">▲</button><span class="blank"></span>
+      <button data-key="left" type="button">◀</button><button data-key="down" type="button">▼</button><button data-key="right" type="button">▶</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.180.0/+esm";
+import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/+esm";
+
+const $ = s => document.querySelector(s);
+const gameWrap = $("#gameWrap");
+const loading = $("#loading");
+const startOverlay = $("#startOverlay");
+const endOverlay = $("#endOverlay");
+const enableTiltBtn = $("#enableTilt");
+const tiltBtn = $("#tiltBtn");
+const calibrateBtn = $("#calibrateBtn");
+const flipBtn = $("#flipBtn");
+const startGameBtn = $("#startGame");
+const resetBtn = $("#resetBtn");
+const playAgainBtn = $("#playAgain");
+const sensitivityEl = $("#sensitivity");
+const sensVal = $("#sensVal");
+const sensorState = $("#sensorState");
+const debug = $("#debug");
+const statusEl = $("#status");
+const timeEl = $("#time");
+const livesEl = $("#lives");
+const speedEl = $("#speed");
+const cpEl = $("#cp");
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x101722);
+scene.fog = new THREE.Fog(0x101722, 45, 145);
+
+const camera = new THREE.PerspectiveCamera(52, 16/9, 0.1, 220);
+camera.position.set(13, 15, 18);
+
+const renderer = new THREE.WebGLRenderer({antialias:true, powerPreference:"high-performance"});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.domElement.setAttribute("aria-label","3D Marble Mayhem course");
+gameWrap.insertBefore(renderer.domElement, gameWrap.firstChild);
+
+scene.add(new THREE.HemisphereLight(0xcfe6ff, 0x263043, 2.1));
+const sun = new THREE.DirectionalLight(0xffffff, 3.1);
+sun.position.set(-18, 28, 16);
+sun.castShadow = true;
+sun.shadow.mapSize.set(1536,1536);
+sun.shadow.camera.left=-35; sun.shadow.camera.right=35; sun.shadow.camera.top=35; sun.shadow.camera.bottom=-35;
+scene.add(sun);
+
+const world = new CANNON.World({gravity:new CANNON.Vec3(0,-14.5,0)});
+world.allowSleep = true;
+world.broadphase = new CANNON.SAPBroadphase(world);
+world.defaultContactMaterial.friction = 0.35;
+world.defaultContactMaterial.restitution = 0.08;
+
+const marbleMat = new CANNON.Material("marble");
+const groundMat = new CANNON.Material("ground");
+world.addContactMaterial(new CANNON.ContactMaterial(marbleMat, groundMat, {
+  friction:0.28,
+  restitution:0.12,
+  contactEquationStiffness:1e8,
+  contactEquationRelaxation:3
+}));
+
+const COLORS = {
+  platform:0xb6b3a7, ramp:0xa6a295, wall:0x60656d,
+  danger:0xc95f67, checkpoint:0x52d3c6, finish:0xffda68
+};
+
+const levelGroup = new THREE.Group();
+scene.add(levelGroup);
+
+function addStaticBox(x,y,z,w,h,d,color=COLORS.platform){
+  const mesh = new THREE.Mesh(
+    new THREE.BoxGeometry(w,h,d),
+    new THREE.MeshStandardMaterial({color,roughness:0.82,metalness:0.03})
+  );
+  mesh.position.set(x,y,z); mesh.castShadow=true; mesh.receiveShadow=true; levelGroup.add(mesh);
+  const body = new CANNON.Body({mass:0, material:groundMat, shape:new CANNON.Box(new CANNON.Vec3(w/2,h/2,d/2))});
+  body.position.set(x,y,z); world.addBody(body);
+  return {mesh,body};
+}
+
+function addFlat(x,z,w,d,topY){
+  return addStaticBox(x,topY-0.38,z,w,0.76,d,COLORS.platform);
+}
+
+function addRampZ(x,z,w,d,y0,y1){
+  const bottom = Math.min(y0,y1)-0.8;
+  const v = [
+    -w/2,bottom,-d/2,  w/2,bottom,-d/2,  -w/2,bottom,d/2,  w/2,bottom,d/2,
+    -w/2,y0,-d/2,     w/2,y0,-d/2,     -w/2,y1,d/2,     w/2,y1,d/2
+  ];
+  const idx = [
+    4,5,6, 5,7,6,
+    0,2,1, 1,2,3,
+    0,1,4, 1,5,4,
+    2,6,3, 3,6,7,
+    0,4,2, 2,4,6,
+    1,3,5, 3,7,5
+  ];
+  return addTriMesh(x,z,v,idx,COLORS.ramp);
+}
+
+function addRampX(x,z,w,d,y0,y1){
+  const bottom = Math.min(y0,y1)-0.8;
+  const v = [
+    -w/2,bottom,-d/2, -w/2,bottom,d/2, w/2,bottom,-d/2, w/2,bottom,d/2,
+    -w/2,y0,-d/2,     -w/2,y0,d/2,     w/2,y1,-d/2,     w/2,y1,d/2
+  ];
+  const idx = [
+    4,6,5, 5,6,7,
+    0,1,2, 1,3,2,
+    0,4,1, 1,4,5,
+    2,3,6, 3,7,6,
+    0,2,4, 2,6,4,
+    1,5,3, 3,5,7
+  ];
+  return addTriMesh(x,z,v,idx,COLORS.ramp);
+}
+
+function addTriMesh(x,z,verts,indices,color){
+  const geom = new THREE.BufferGeometry();
+  const expanded = [];
+  for(const i of indices){
+    expanded.push(verts[i*3],verts[i*3+1],verts[i*3+2]);
+  }
+  geom.setAttribute("position",new THREE.Float32BufferAttribute(expanded,3));
+  geom.computeVertexNormals();
+  const mesh = new THREE.Mesh(geom,new THREE.MeshStandardMaterial({color,roughness:0.82,side:THREE.DoubleSide}));
+  mesh.position.set(x,0,z); mesh.castShadow=true; mesh.receiveShadow=true; levelGroup.add(mesh);
+
+  const shape = new CANNON.Trimesh(verts,indices);
+  const body = new CANNON.Body({mass:0,material:groundMat,shape});
+  body.position.set(x,0,z);
+  world.addBody(body);
+  return {mesh,body};
+}
+
+function wall(x,z,w,d,baseY,h=1.25){
+  addStaticBox(x,baseY+h/2,z,w,h,d,COLORS.wall);
+}
+
+function markerRing(x,y,z,color){
+  const m = new THREE.Mesh(
+    new THREE.TorusGeometry(1.0,0.09,10,32),
+    new THREE.MeshStandardMaterial({color,emissive:color,emissiveIntensity:0.7})
+  );
+  m.rotation.x = Math.PI/2; m.position.set(x,y,z); scene.add(m); return m;
+}
+
+// --- Course: continuous levels connected only by ramps ---
+addFlat(0,4,9,9,0);
+addRampZ(0,-3.5,6,6,0,-2.2);
+addFlat(0,-8.5,7,5,-2.2);
+
+addRampX(5,-8.5,10,5,-2.2,1.0);
+addFlat(11,-8.5,5,5,1.0);
+
+addRampZ(11,-14,5,6,1.0,4.0);
+addFlat(11,-19,7,5,4.0);
+
+addRampX(17,-19,10,5,4.0,1.8);
+addFlat(23,-19,5,5,1.8);
+
+addRampZ(23,-13.5,5,6,1.8,-1.5);
+addFlat(23,-8.5,7,5,-1.5);
+
+addRampX(17,-8.5,10,5,-1.5,2.7);
+addFlat(11,-8.5,5,5,2.7);
+
+addRampZ(11,-3,5,6,2.7,6.0);
+addFlat(11,2,8,5,6.0);
+
+addRampZ(11,7,6,5,6.0,3.0);
+addFlat(11,11,8,5,3.0);
+
+// A few safety rails, leaving deliberate open edges.
+wall(-4.25,4,.25,8,0,1.0);
+wall(4.25,4,.25,8,0,1.0);
+wall(-3.35,-8.5,.22,4.6,-2.2,0.8);
+wall(3.35,-8.5,.22,4.6,-2.2,0.8);
+wall(8.6,-19,.22,4.5,4,0.9);
+wall(13.4,-19,.22,4.5,4,0.9);
+wall(8.6,2,.22,4.5,6,0.9);
+wall(13.4,2,.22,4.5,6,0.9);
+
+// Void visual
+const abyss = new THREE.Mesh(
+  new THREE.PlaneGeometry(220,220),
+  new THREE.MeshStandardMaterial({color:0x070c13,roughness:1})
+);
+abyss.rotation.x=-Math.PI/2; abyss.position.y=-12; scene.add(abyss);
+
+// Marble
+const R=0.62;
+const marbleMesh = new THREE.Mesh(
+  new THREE.SphereGeometry(R,36,28),
+  new THREE.MeshPhysicalMaterial({color:0xe9f1ff,metalness:0.42,roughness:0.16,clearcoat:1,clearcoatRoughness:0.12})
+);
+marbleMesh.castShadow=true; scene.add(marbleMesh);
+const stripe = new THREE.Mesh(
+  new THREE.TorusGeometry(R*1.01,0.045,8,40),
+  new THREE.MeshStandardMaterial({color:0x41698f,roughness:0.35})
+);
+stripe.rotation.x=Math.PI/2; marbleMesh.add(stripe);
+
+const marbleBody = new CANNON.Body({
+  mass:1.35,
+  material:marbleMat,
+  shape:new CANNON.Sphere(R),
+  linearDamping:0.055,
+  angularDamping:0.075,
+  allowSleep:false
+});
+world.addBody(marbleBody);
+
+// Checkpoints
+const checkpoints = [
+  {x:11,y:4,z:-19,n:1},
+  {x:23,y:-1.5,z:-8.5,n:2},
+  {x:11,y:6,z:2,n:3}
+].map(c=>({...c,hit:false,ring:markerRing(c.x,c.y+0.12,c.z,COLORS.checkpoint)}));
+
+// Finish
+const finishBase = new THREE.Mesh(
+  new THREE.CylinderGeometry(1.45,1.45,.18,36),
+  new THREE.MeshStandardMaterial({color:COLORS.finish,emissive:0x8a6200,emissiveIntensity:1.3})
+);
+finishBase.position.set(11,3.10,11); scene.add(finishBase);
+const finishRing = markerRing(11,3.32,11,COLORS.finish);
+
+// Moving hazards
+const hazards=[];
+function hazard(x,y,z,axis,amp,phase){
+  const mesh=new THREE.Mesh(
+    new THREE.OctahedronGeometry(.72),
+    new THREE.MeshStandardMaterial({color:COLORS.danger,emissive:0x4c1118,emissiveIntensity:.7,roughness:.35})
+  );
+  mesh.castShadow=true;scene.add(mesh);
+  const body=new CANNON.Body({mass:0,material:groundMat,shape:new CANNON.Sphere(.82)});
+  world.addBody(body);
+  hazards.push({x,y,z,axis,amp,phase,mesh,body});
+}
+hazard(1,-1.2,-8.5,"x",1.6,0);
+hazard(11,4.9,-19,"x",1.6,2);
+hazard(23,-.5,-8.5,"z",1.5,4);
+hazard(11,7.0,2,"x",1.4,1);
+
+let gameRunning=false;
+let paused=false;
+let lives=5;
+let timeLeft=120;
+let cpCount=0;
+let checkpoint={x:0,y:R+0.15,z:5};
+let last=performance.now();
+let invulnerable=0;
+
+// Inputs
+const keys={up:false,down:false,left:false,right:false,brake:false};
+let tiltEnabled=false;
+let hasOrientation=false;
+let rawTilt={x:0,y:0};
+let neutral={x:0,y:0};
+let tiltFlip=1;
+
+function screenAngle(){
+  let a = 0;
+  if(screen.orientation && Number.isFinite(screen.orientation.angle)) a=screen.orientation.angle;
+  else if(Number.isFinite(window.orientation)) a=window.orientation;
+  a=((a%360)+360)%360;
+  if(a===270)a=-90;
+  return a;
+}
+function orientationToScreen(beta,gamma){
+  const a=screenAngle();
+  if(a===90) return {x:beta,y:-gamma};
+  if(a===-90) return {x:-beta,y:gamma};
+  if(a===180) return {x:-gamma,y:-beta};
+  return {x:gamma,y:beta};
+}
+function onOrientation(e){
+  if(e.beta==null || e.gamma==null) return;
+  hasOrientation=true;
+  rawTilt=orientationToScreen(e.beta,e.gamma);
+  if(tiltEnabled){
+    sensorState.textContent="Tilt active";
+    sensorState.className="sensor ok";
+  }
+}
+window.addEventListener("deviceorientation",onOrientation,true);
+
+async function enableTilt(){
+  try{
+    if(typeof DeviceOrientationEvent!=="undefined" && typeof DeviceOrientationEvent.requestPermission==="function"){
+      const result=await DeviceOrientationEvent.requestPermission();
+      if(result!=="granted") throw new Error("Motion permission was not granted.");
+    }
+    tiltEnabled=true;
+    calibrateBtn.disabled=false;
+    flipBtn.disabled=false;
+    await new Promise(r=>setTimeout(r,250));
+    neutral={...rawTilt};
+    sensorState.textContent=hasOrientation ? "Tilt active — calibrated" : "Tilt enabled — waiting for sensor data";
+    sensorState.className=hasOrientation ? "sensor ok" : "sensor";
+    startOverlay.classList.add("hidden");
+    gameRunning=true;
+    gameWrap.focus();
+  }catch(err){
+    tiltEnabled=false;
+    sensorState.textContent="Tilt unavailable: "+(err?.message||"permission denied");
+    sensorState.className="sensor bad";
+    statusEl.textContent="You can still use touch controls or keyboard.";
+  }
+}
+enableTiltBtn.addEventListener("click",enableTilt);
+tiltBtn.addEventListener("click",enableTilt);
+calibrateBtn.addEventListener("click",()=>{
+  neutral={...rawTilt};
+  sensorState.textContent="Tilt calibrated";
+  sensorState.className="sensor ok";
+});
+flipBtn.addEventListener("click",()=>{
+  tiltFlip*=-1;
+  statusEl.textContent=tiltFlip===1 ? "Normal tilt direction." : "Tilt direction flipped.";
+});
+sensitivityEl.addEventListener("input",()=>sensVal.textContent=Number(sensitivityEl.value).toFixed(2)+"×");
+
+function resetMarble(message="Marble reset."){
+  marbleBody.position.set(checkpoint.x,checkpoint.y,checkpoint.z);
+  marbleBody.velocity.set(0,0,0);
+  marbleBody.angularVelocity.set(0,0,0);
+  marbleBody.quaternion.set(0,0,0,1);
+  invulnerable=1.0;
+  statusEl.textContent=message;
+}
+function fullRestart(){
+  lives=5;timeLeft=120;cpCount=0;checkpoint={x:0,y:R+0.15,z:5};
+  checkpoints.forEach(c=>{
+    c.hit=false;c.ring.material.color.setHex(COLORS.checkpoint);c.ring.material.emissive.setHex(COLORS.checkpoint);
+  });
+  livesEl.textContent=lives;cpEl.textContent=cpCount;timeEl.textContent=timeLeft.toFixed(1);
+  endOverlay.classList.add("hidden");gameRunning=true;paused=false;resetMarble("Go!");
+}
+resetBtn.addEventListener("click",()=>resetMarble());
+playAgainBtn.addEventListener("click",fullRestart);
+startGameBtn.addEventListener("click",()=>{
+  startOverlay.classList.add("hidden");gameRunning=true;gameWrap.focus();
+});
+
+function loseLife(reason){
+  if(invulnerable>0 || !gameRunning) return;
+  lives--;timeLeft=Math.max(0,timeLeft-5);livesEl.textContent=lives;
+  if(lives<=0){finishGame(false,"Out of marbles.");return;}
+  resetMarble(reason+" — lost a life and 5 seconds.");
+}
+function finishGame(win,msg){
+  gameRunning=false;
+  $("#endTitle").textContent=win?"Course complete!":"Game over";
+  $("#endText").textContent=msg+(win?` ${timeLeft.toFixed(1)} seconds remaining.`:"");
+  endOverlay.classList.remove("hidden");
+}
+function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
+
+function inputForce(){
+  let sx=0,sz=0;
+  if(keys.left)sx-=1;if(keys.right)sx+=1;if(keys.up)sz-=1;if(keys.down)sz+=1;
+
+  if(tiltEnabled && hasOrientation){
+    const sens=Number(sensitivityEl.value);
+    let dx=(rawTilt.x-neutral.x)*tiltFlip;
+    let dy=(rawTilt.y-neutral.y)*tiltFlip;
+    const dead=2.2;
+    const shape=v=>{
+      const s=Math.sign(v),a=Math.abs(v);
+      if(a<dead)return 0;
+      return s*clamp((a-dead)/15,0,1.5)*sens;
+    };
+    sx+=shape(dx);
+    sz+=shape(dy);
+    debug.textContent=`tilt ${dx.toFixed(1)}°, ${dy.toFixed(1)}°`;
+  }else{
+    debug.textContent="";
+  }
+  const mag=Math.hypot(sx,sz);
+  if(mag>1.6){sx*=1.6/mag;sz*=1.6/mag;}
+  return {x:sx,z:sz};
+}
+
+const ray = new CANNON.RaycastResult();
+function isGrounded(){
+  ray.reset();
+  const from=marbleBody.position.clone();
+  const to=new CANNON.Vec3(from.x,from.y-(R+0.25),from.z);
+  world.raycastClosest(from,to,{collisionFilterMask:-1,skipBackfaces:false},ray);
+  return ray.hasHit && ray.distance<=R+0.18;
+}
+
+function updatePhysics(dt,now){
+  if(!gameRunning||paused)return;
+
+  timeLeft-=dt;
+  if(timeLeft<=0){timeLeft=0;finishGame(false,"Time up.");return;}
+  invulnerable=Math.max(0,invulnerable-dt);
+
+  const inp=inputForce();
+  const grounded=isGrounded();
+  const forceScale=grounded?17.5:4.5;
+  marbleBody.applyForce(new CANNON.Vec3(inp.x*forceScale,0,inp.z*forceScale),marbleBody.position);
+
+  if(keys.brake && grounded){
+    marbleBody.velocity.x*=Math.pow(0.08,dt);
+    marbleBody.velocity.z*=Math.pow(0.08,dt);
+    marbleBody.angularVelocity.scale(Math.pow(0.15,dt),marbleBody.angularVelocity);
+  }
+
+  // Moderate terminal horizontal speed, while preserving downhill momentum.
+  const hs=Math.hypot(marbleBody.velocity.x,marbleBody.velocity.z);
+  const max=13.5;
+  if(hs>max){
+    const s=max/hs;
+    marbleBody.velocity.x*=s;marbleBody.velocity.z*=s;
+  }
+
+  hazards.forEach(h=>{
+    const off=Math.sin(now*.0016+h.phase)*h.amp;
+    const x=h.x+(h.axis==="x"?off:0);
+    const z=h.z+(h.axis==="z"?off:0);
+    h.body.position.set(x,h.y,z);
+    h.mesh.position.set(x,h.y,z);
+    h.mesh.rotation.y+=dt*1.8;h.mesh.rotation.x+=dt*.8;
+  });
+
+  world.step(1/60,dt,4);
+
+  if(marbleBody.position.y<-10){
+    loseLife("Fell into the void");
+  }
+
+  checkpoints.forEach(c=>{
+    c.ring.rotation.z+=dt*.9;
+    if(!c.hit && Math.hypot(marbleBody.position.x-c.x,marbleBody.position.z-c.z)<1.25 && Math.abs(marbleBody.position.y-(c.y+R))<1.7){
+      c.hit=true;cpCount=Math.max(cpCount,c.n);
+      checkpoint={x:c.x,y:c.y+R+.2,z:c.z};
+      c.ring.material.color.setHex(0xffdf72);c.ring.material.emissive.setHex(0x8a6300);
+      cpEl.textContent=cpCount;statusEl.textContent=`Checkpoint ${c.n} reached.`;
+    }
+  });
+
+  finishRing.rotation.z+=dt*.8;
+  finishBase.rotation.y+=dt*.5;
+  if(Math.hypot(marbleBody.position.x-11,marbleBody.position.z-11)<1.45 && marbleBody.position.y>2.7 && marbleBody.position.y<5){
+    finishGame(true,"You conquered the course.");
+  }
+
+  timeEl.textContent=Math.max(0,timeLeft).toFixed(1);
+  speedEl.textContent=Math.hypot(marbleBody.velocity.x,marbleBody.velocity.z).toFixed(1);
+}
+
+function syncAndRender(){
+  marbleMesh.position.copy(marbleBody.position);
+  marbleMesh.quaternion.copy(marbleBody.quaternion);
+
+  const p=marbleMesh.position;
+  const desired=new THREE.Vector3(p.x+12.5,p.y+14.5,p.z+16.5);
+  camera.position.lerp(desired,.055);
+  camera.lookAt(p.x,p.y,p.z);
+  renderer.render(scene,camera);
+}
+
+function resize(){
+  const r=gameWrap.getBoundingClientRect();
+  const w=Math.max(320,Math.round(r.width));
+  const h=Math.max(280,Math.round(r.height));
+  renderer.setSize(w,h,false);
+  camera.aspect=w/h;camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(gameWrap);
+resize();
+
+const map={ArrowUp:"up",w:"up",W:"up",ArrowDown:"down",s:"down",S:"down",ArrowLeft:"left",a:"left",A:"left",ArrowRight:"right",d:"right",D:"right"};
+gameWrap.addEventListener("keydown",e=>{
+  if(map[e.key]){keys[map[e.key]]=true;e.preventDefault();}
+  if(e.code==="Space"){keys.brake=true;e.preventDefault();}
+  if(e.key==="r"||e.key==="R"){resetMarble();e.preventDefault();}
+  if(e.key==="p"||e.key==="P"){paused=!paused;statusEl.textContent=paused?"Paused.":"Go!";e.preventDefault();}
+});
+gameWrap.addEventListener("keyup",e=>{
+  if(map[e.key]){keys[map[e.key]]=false;e.preventDefault();}
+  if(e.code==="Space"){keys.brake=false;e.preventDefault();}
+});
+document.querySelectorAll(".pad button[data-key]").forEach(b=>{
+  const k=b.dataset.key;
+  const on=e=>{e.preventDefault();keys[k]=true;gameWrap.focus();};
+  const off=e=>{e.preventDefault();keys[k]=false;};
+  b.addEventListener("pointerdown",on);b.addEventListener("pointerup",off);
+  b.addEventListener("pointercancel",off);b.addEventListener("pointerleave",off);
+});
+
+document.addEventListener("visibilitychange",()=>{
+  if(document.hidden && gameRunning){paused=true;statusEl.textContent="Paused while app is in the background.";}
+});
+
+resetMarble("Ready.");
+loading.classList.add("hidden");
+startOverlay.classList.remove("hidden");
+
+function loop(now){
+  const dt=Math.min(0.035,(now-last)/1000||0);
+  last=now;
+  updatePhysics(dt,now);
+  syncAndRender();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
